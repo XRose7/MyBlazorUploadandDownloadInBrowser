@@ -1,0 +1,80 @@
+﻿@page "/upload"
+@using SkiaSharp
+@using SkiaSharp.Views.Blazor
+
+<PageTitle>Upload with Skia Sharp</PageTitle>
+
+<h3>UploadWithSharp1</h3>
+
+<InputFile OnChange="UploadPicture"></InputFile>
+
+<SKCanvasView OnPaintSurface="OnPaintSurface" @ref="canvasView" style="display:flex;justify-content:center;align-items: center;width:700px; height:700px; background-color:white"></SKCanvasView>
+
+<button @onclick="DownloadButton">Download</button>
+
+@code {
+	[Inject]
+	private IJSRuntime? JSRuntime { get; set; }
+
+	private SKBitmap? bitmap;
+	private SKCanvasView? canvasView;
+	private string? fileUrl;
+
+	private async Task LoadBitmip(byte[] imageData)
+	{
+		await using (var stream = new MemoryStream(imageData))
+		{
+			bitmap = SKBitmap.Decode(stream);
+		}
+	}
+
+	private async Task UploadPicture(InputFileChangeEventArgs e)
+	{
+		var file = e.File;
+		// var file = e.GetMultipleFiles().FirstOrDefault();
+		if (file != null)
+		{
+			var buffer = new byte[file.Size];
+			await file.OpenReadStream().ReadAsync(buffer);
+			await LoadBitmip(buffer);
+			canvasView!.Invalidate();
+		}
+
+	}
+
+	private void OnPaintSurface(SKPaintSurfaceEventArgs e)
+	{
+		if (bitmap != null)
+		{
+			Console.WriteLine(e.Info.Height);
+			Console.WriteLine(e.Info.Width);
+			var canvas = e.Surface.Canvas;
+			canvas.Clear();
+			canvas.DrawBitmap(bitmap, new SKPoint(0, 0));
+		}
+	}
+
+	private async Task DownloadButton(MouseEventArgs e)
+	{
+		if (canvasView != null)
+		{
+			Console.WriteLine("Click!!!!!DownLoad!!");
+			using (SKImage image = SKImage.FromBitmap(bitmap))
+			{
+				SKData data = image.Encode();
+				DateTime dt = DateTime.Now;
+				string filename = String.Format("FingerPaint_{0:D4}-{1:D2}-{2:D2}_{3:D2}-{4:D2}-{5:D2}.png",
+								dt.Year, dt.Month, dt.Day, dt.Hour, dt.Minute, dt.Second);
+				// string filename = String.Format("FingerPaint_{0:D4}-{1:D2}-{2:D2}_{3:D2}-{4:D2}-{5:D2}-{6:D3}.png",
+				// 								dt.Year, dt.Month, dt.Day, dt.Hour, dt.Minute, dt.Second, dt.Millisecond);
+				var buffer = data.ToArray();
+
+				await JSRuntime!.InvokeVoidAsync("downloadFile", new
+				{
+					fileName = filename,
+					fileContent = buffer
+				});
+			}
+		}
+	}
+}
